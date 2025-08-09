@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Location Tracker</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- PocketBase JavaScript SDK -->
+    <script src="https://unpkg.com/pocketbase@0.21.3/dist/pocketbase.umd.js"></script>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+        }
+
+        .header {
+            background: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ef4444;
+        }
+
+        .status-indicator.connected {
+            background: #10b981;
+        }
+
+        .container {
+            height: calc(100vh - 80px);
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            min-width: 200px;
+            z-index: 1000;
+        }
+
+        .location-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .location-item:last-child {
+            border-bottom: none;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .coordinates {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .updated-time {
+            font-size: 0.75rem;
+            color: #9ca3af;
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            font-size: 1.125rem;
+            color: #6b7280;
+        }
+
+        .error {
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem;
+        }
+
+        /* Message popup styles */
+        .message-popup {
+            min-width: 250px;
+            padding: 0;
+        }
+
+        .message-content {
+            padding: 10px;
+        }
+
+        .message-header {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #374151;
+        }
+
+        .message-info {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 10px;
+        }
+
+        .message-form {
+            margin-top: 10px;
+        }
+
+        .message-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-bottom: 8px;
+            box-sizing: border-box;
+        }
+
+        .message-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-primary:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background: #d1d5db;
+        }
+
+        .btn-send-message {
+            background: #10b981;
+            color: white;
+            padding: 4px 8px;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+        .btn-send-message:hover {
+            background: #059669;
+        }
+
+        .message-status {
+            font-size: 11px;
+            margin-top: 5px;
+            padding: 3px 6px;
+            border-radius: 3px;
+        }
+
+        .message-status.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .message-status.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Path toggle button styles */
+        .path-toggle {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: white;
+            padding: 1rem;
+            margin-right: 260px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+
+        .path-toggle:hover {
+            background: #f9fafb;
+        }
+
+        .path-toggle input[type="checkbox"] {
+            margin: 0;
+        }
+
+        .path-toggle label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: 500;
+            color: #374151;
+        }
+    </style>
+</head>
+<body>
+<div x-data="locationTracker()" x-init="init()">
+    <!-- Header -->
+    <div class="header">
+        <div class="title">Location Tracker</div>
+        <div class="status">
+            <div class="status-indicator" :class="{ 'connected': isConnected }"></div>
+            <span x-text="isConnected ? 'Connected' : 'Disconnected'"></span>
+            <span x-text="`(${uniqueUsers.length} users, ${locations.length} locations)`"></span>
+        </div>
+    </div>
+
+    <!-- Error Display -->
+    <div x-show="error" class="error" x-text="error"></div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Loading State -->
+        <div x-show="loading" class="loading">
+            Loading locations...
+        </div>
+
+        <!-- Map Container -->
+        <div id="map" x-show="!loading"></div>
+
+        <!-- Path Toggle Button -->
+        <div x-show="!loading" class="path-toggle" @click="togglePaths()">
+            <input type="checkbox" id="path-toggle" x-model="showPaths">
+            <label for="path-toggle">Show Paths</label>
+        </div>
+
+        <!-- Info Panel -->
+        <div x-show="!loading && uniqueUsers.length > 0" class="info-panel">
+            <h3 style="margin: 0 0 1rem 0; font-size: 1rem; color: #374151;">Active Users</h3>
+
+            <!-- Routing progress indicator -->
+            <div x-show="routingInProgress.size > 0"
+                 style="margin-bottom: 1rem; padding: 0.5rem; background: #f0f9ff; border-radius: 4px; font-size: 0.875rem; color: #0369a1;">
+                🛣️ Calculating road routes...
+            </div>
+
+            <template x-for="user in uniqueUsers" :key="user.user_id">
+                <div class="location-item">
+                    <div class="user-name" x-text="user.user_name"></div>
+                    <div class="coordinates"
+                         x-text="`${user.currentLocation.lat.toFixed(4)}, ${user.currentLocation.lon.toFixed(4)}`"></div>
+                    <div class="updated-time" x-text="formatTime(user.latestUpdate)"></div>
+                    <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">
+                        📍 <span x-text="user.locationCount"></span> location<span
+                            x-show="user.locationCount !== 1">s</span>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+    const baseUrl = '/';
+
+    /**
+     * Main Alpine.js component for the location tracker application
+     * Manages real-time location data, map visualization, and user interactions
+     */
+    function locationTracker() {
+        return {
+            // Core instances
+            pb: null,                    // PocketBase client for real-time data
+            map: null,                   // Leaflet map instance
+            
+            // Data storage
+            locations: [],               // All location records from database
+            uniqueUsers: [],             // Aggregated user data with location counts
+            
+            // Map visualization
+            markers: new Map(),          // Map markers by coordinate key
+            paths: new Map(),            // User path polylines by user ID
+            userPaths: new Map(),        // All locations grouped by user ID
+            userColors: new Map(),       // Consistent colors assigned to each user
+            
+            // Routing system
+            routeCache: new Map(),       // Cache for API route calculations
+            routingInProgress: new Set(), // Track active routing requests
+            
+            // UI state
+            loading: true,
+            error: null,
+            isConnected: false,
+            showPaths: false,
+
+            /**
+             * Initialize the application - setup map, load data, establish real-time connection
+             */
+            async init() {
+                try {
+                    // Expose instance globally for onclick handlers in dynamically generated HTML
+                    window.locationTracker = this;
+
+                    this.pb = new PocketBase(baseUrl);
+                    this.initMap();
+                    
+                    // Load initial data and setup real-time updates
+                    await this.loadLocations();
+                    await this.setupRealtime();
+
+                    this.loading = false;
+                } catch (err) {
+                    console.error('Initialization error:', err);
+                    this.loading = false;
+                }
+            },
+
+            initMap() {
+                this.map = L.map('map').setView([0, 0], 2);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(this.map);
+            },
+
+            /**
+             * Load initial location data and setup map view
+             */
+            async loadLocations() {
+                try {
+                    const records = await this.pb.collection('location').getFullList({
+                        sort: '-updated'
+                    });
+
+                    this.locations = records;
+                    this.buildUserPaths();
+                    this.buildUniqueUsers();
+                    this.updateMapMarkers();
+
+                    // Auto-fit map to show all locations with padding
+                    if (this.locations.length > 0) {
+                        const bounds = L.latLngBounds(
+                            this.locations.map(loc => [loc.location.lat, loc.location.lon])
+                        );
+                        this.map.fitBounds(bounds, {padding: [20, 20]});
+                    }
+                } catch (err) {
+                    this.error = `Failed to load locations: ${err.message}`;
+                    console.error('Load locations error:', err);
+                }
+            },
+
+            /**
+             * Setup real-time WebSocket subscription for live location updates
+             */
+            async setupRealtime() {
+                try {
+                    await this.pb.collection('location').subscribe('*', (e) => {
+                        this.handleRealtimeUpdate(e);
+                    });
+                    this.isConnected = true;
+                } catch (err) {
+                    this.error = `Failed to setup real-time updates: ${err.message}`;
+                    console.error('Realtime setup error:', err);
+                }
+            },
+
+            /**
+             * Handle real-time database changes (create/update/delete)
+             */
+            handleRealtimeUpdate(e) {
+                const {action, record} = e;
+                switch (action) {
+                    case 'create':
+                    case 'update':
+                        this.updateLocation(record);
+                        break;
+                    case 'delete':
+                        this.removeLocation(record.id);
+                        break;
+                }
+            },
+
+            updateLocation(record) {
+                // Find existing location or add new one
+                const existingIndex = this.locations.findIndex(loc => loc.id === record.id);
+
+                if (existingIndex >= 0) {
+                    this.locations[existingIndex] = record;
+                } else {
+                    this.locations.push(record);
+                }
+
+                // Update unique users list
+                this.buildUniqueUsers();
+
+                // Update map marker
+                this.updateMarker(record);
+
+                // Update user path
+                this.updateUserPath(record);
+            },
+
+            removeLocation(locationId) {
+                // Find the location before removing to get user info
+                const location = this.locations.find(loc => loc.id === locationId);
+
+                // Remove from locations array
+                this.locations = this.locations.filter(loc => loc.id !== locationId);
+
+                // Update unique users list
+                this.buildUniqueUsers();
+
+                // Remove marker from map
+                if (this.markers.has(locationId)) {
+                    this.map.removeLayer(this.markers.get(locationId));
+                    this.markers.delete(locationId);
+                }
+
+                // Update user path if location was found
+                if (location) {
+                    const userId = location.user_id;
+                    if (this.userPaths.has(userId)) {
+                        const userLocations = this.userPaths.get(userId).filter(loc => loc.id !== locationId);
+                        this.userPaths.set(userId, userLocations);
+
+                        // Redraw path if paths are visible
+                        if (this.showPaths) {
+                            this.drawUserPath(userId, userLocations);
+                        }
+                    }
+                }
+            },
+
+            updateMapMarkers() {
+                // Clear existing markers
+                this.markers.forEach(marker => this.map.removeLayer(marker));
+                this.markers.clear();
+
+                // Group locations by coordinates
+                const locationGroups = this.groupLocationsByCoordinates(this.locations);
+
+                // Create markers for each location group
+                locationGroups.forEach(locationGroup => {
+                    this.createGroupMarker(locationGroup);
+                });
+            },
+
+            /**
+             * Group locations by coordinates to handle multiple users at same location
+             * Merges locations within 5 meters for the same user to avoid duplicates
+             */
+            groupLocationsByCoordinates(locations) {
+                const groups = [];
+
+                locations.forEach(location => {
+                    let addedToGroup = false;
+
+                    // Check if this location can be merged with an existing group
+                    for (let group of groups) {
+                        const groupLat = group[0].location.lat;
+                        const groupLon = group[0].location.lon;
+                        const distance = this.calculateDistance(
+                            location.location.lat, location.location.lon,
+                            groupLat, groupLon
+                        );
+
+                        // If within 5 meters, add to this group
+                        if (distance * 1000 <= 5) { // Convert km to meters
+                            // For same user, merge by keeping the most recent location
+                            const existingUserIndex = group.findIndex(loc => loc.user_id === location.user_id);
+                            if (existingUserIndex >= 0) {
+                                // Replace with more recent location
+                                if (new Date(location.updated) > new Date(group[existingUserIndex].updated)) {
+                                    group[existingUserIndex] = location;
+                                }
+                            } else {
+                                // Different user, add to group
+                                group.push(location);
+                            }
+                            addedToGroup = true;
+                            break;
+                        }
+                    }
+
+                    // If not added to any existing group, create new group
+                    if (!addedToGroup) {
+                        groups.push([location]);
+                    }
+                });
+
+                return groups;
+            },
+
+            /**
+             * Create a map marker for a group of users at the same location
+             * Uses cluster-style icon for multiple users, regular marker for single user
+             */
+            createGroupMarker(locationGroup) {
+                const primaryLocation = locationGroup[0];
+                const lat = primaryLocation.location.lat;
+                const lon = primaryLocation.location.lon;
+                const markerKey = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+
+                const popupContent = this.createGroupPopupContent(locationGroup);
+
+                let marker;
+                if (locationGroup.length > 1) {
+                    // Cluster marker showing user count
+                    const clusterIcon = L.divIcon({
+                        html: `<div style="background: #3b82f6; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${locationGroup.length}</div>`,
+                        className: 'custom-cluster-icon',
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    });
+                    marker = L.marker([lat, lon], {icon: clusterIcon});
+                } else {
+                    marker = L.marker([lat, lon]);
+                }
+
+                marker.addTo(this.map)
+                    .bindPopup(popupContent, {
+                        className: 'message-popup',
+                        maxWidth: 350,
+                        minWidth: 300
+                    });
+
+                // Setup event handlers when popup opens
+                marker.on('popupopen', () => {
+                    this.setupGroupPopupEvents(locationGroup);
+                });
+
+                this.markers.set(markerKey, marker);
+            },
+
+            /**
+             * Update marker after location change - rebuilds all markers due to grouping logic
+             */
+            updateMarker(location) {
+                this.updateMapMarkers();
+            },
+
+            createGroupPopupContent(locationGroup) {
+                const primaryLocation = locationGroup[0];
+                const popupId = `group-popup-${primaryLocation.location.lat.toFixed(6)}-${primaryLocation.location.lon.toFixed(6)}`;
+
+                let content = `<div class="message-content" id="${popupId}">`;
+
+                if (locationGroup.length > 1) {
+                    content += `
+                            <div class="message-header">📍 ${locationGroup.length} Users at this Location</div>
+                            <div class="message-info">
+                                <div>Lat: ${primaryLocation.location.lat.toFixed(6)}</div>
+                                <div>Lon: ${primaryLocation.location.lon.toFixed(6)}</div>
+                            </div>
+                        `;
+                } else {
+                    content += `
+                            <div class="message-header">${primaryLocation.user_name}</div>
+                            <div class="message-info">
+                                <div>Lat: ${primaryLocation.location.lat.toFixed(6)}</div>
+                                <div>Lon: ${primaryLocation.location.lon.toFixed(6)}</div>
+                                <div>Updated: ${this.formatTime(primaryLocation.updated)}</div>
+                            </div>
+                        `;
+                }
+
+                // Add user list for multiple users
+                if (locationGroup.length > 1) {
+                    content += `<div style="margin: 1rem 0; max-height: 200px; overflow-y: auto;">`;
+                    locationGroup.forEach((location, index) => {
+                        content += `
+                                <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem; background: #f9fafb;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                        <strong style="color: #374151;">${location.user_name}</strong>
+                                        <small style="color: #6b7280;">${this.formatTime(location.updated)}</small>
+                                    </div>
+                                    
+                                    <div id="message-form-${location.id}" style="display: none;">
+                                        <div class="message-form">
+                                            <input 
+                                                type="text" 
+                                                id="message-input-${location.id}"
+                                                class="message-input" 
+                                                placeholder="Type your message..."
+                                                maxlength="500"
+                                            >
+                                            <div class="message-buttons">
+                                                <button 
+                                                    class="btn btn-secondary" 
+                                                    onclick="window.locationTracker.cancelMessage('${location.id}')"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button 
+                                                    class="btn btn-primary" 
+                                                    id="send-btn-${location.id}"
+                                                    onclick="window.locationTracker.sendMessage('${location.id}', '${location.user_id}')"
+                                                >
+                                                    Send
+                                                </button>
+                                            </div>
+                                            <div id="message-status-${location.id}" class="message-status" style="display: none;"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <button 
+                                        class="btn btn-send-message" 
+                                        id="show-message-btn-${location.id}"
+                                        onclick="window.locationTracker.showMessageForm('${location.id}')"
+                                        style="width: 100%; margin-top: 0.5rem;"
+                                    >
+                                        📨 Send Message to ${location.user_name}
+                                    </button>
+                                </div>
+                            `;
+                    });
+                    content += `</div>`;
+                } else {
+                    // Single user - show message form
+                    const location = locationGroup[0];
+                    content += `
+                            <div id="message-form-${location.id}" style="display: none;">
+                                <div class="message-form">
+                                    <input 
+                                        type="text" 
+                                        id="message-input-${location.id}"
+                                        class="message-input" 
+                                        placeholder="Type your message..."
+                                        maxlength="500"
+                                    >
+                                    <div class="message-buttons">
+                                        <button 
+                                            class="btn btn-secondary" 
+                                            onclick="window.locationTracker.cancelMessage('${location.id}')"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button 
+                                            class="btn btn-primary" 
+                                            id="send-btn-${location.id}"
+                                            onclick="window.locationTracker.sendMessage('${location.id}', '${location.user_id}')"
+                                        >
+                                            Send
+                                        </button>
+                                    </div>
+                                    <div id="message-status-${location.id}" class="message-status" style="display: none;"></div>
+                                </div>
+                            </div>
+                            
+                            <button 
+                                class="btn btn-send-message" 
+                                id="show-message-btn-${location.id}"
+                                onclick="window.locationTracker.showMessageForm('${location.id}')"
+                            >
+                                📨 Send Message
+                            </button>
+                        `;
+                }
+
+                content += `</div>`;
+                return content;
+            },
+
+
+
+            setupGroupPopupEvents(locationGroup) {
+                // Setup events for all users in the group
+                locationGroup.forEach(location => {
+                    this.setupPopupEvents(location);
+                });
+            },
+
+            setupPopupEvents(location) {
+                // Setup enter key listener for message input
+                const messageInput = document.getElementById(`message-input-${location.id}`);
+                if (messageInput) {
+                    messageInput.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            this.sendMessage(location.id, location.user_id);
+                        }
+                    });
+                }
+            },
+
+            showMessageForm(locationId) {
+                const messageForm = document.getElementById(`message-form-${locationId}`);
+                const showButton = document.getElementById(`show-message-btn-${locationId}`);
+                const messageInput = document.getElementById(`message-input-${locationId}`);
+
+                if (messageForm && showButton) {
+                    messageForm.style.display = 'block';
+                    showButton.style.display = 'none';
+
+                    // Focus on input after a small delay to ensure it's visible
+                    setTimeout(() => {
+                        if (messageInput) {
+                            messageInput.focus();
+                        }
+                    }, 100);
+                }
+            },
+
+            cancelMessage(locationId) {
+                const messageForm = document.getElementById(`message-form-${locationId}`);
+                const showButton = document.getElementById(`show-message-btn-${locationId}`);
+                const messageInput = document.getElementById(`message-input-${locationId}`);
+                const statusDiv = document.getElementById(`message-status-${locationId}`);
+
+                if (messageForm && showButton) {
+                    messageForm.style.display = 'none';
+                    showButton.style.display = 'block';
+
+                    // Clear input and status
+                    if (messageInput) messageInput.value = '';
+                    if (statusDiv) statusDiv.style.display = 'none';
+                }
+            },
+
+            /**
+             * Send a message to a Telegram user via the backend API
+             * Handles UI state updates and error feedback
+             */
+            async sendMessage(locationId, userId) {
+                const messageInput = document.getElementById(`message-input-${locationId}`);
+                const sendButton = document.getElementById(`send-btn-${locationId}`);
+
+                if (!messageInput || !messageInput.value.trim()) {
+                    this.showMessageStatus(locationId, 'Please enter a message', 'error');
+                    return;
+                }
+
+                const message = messageInput.value.trim();
+
+                // Show loading state
+                if (sendButton) {
+                    sendButton.disabled = true;
+                    sendButton.textContent = 'Sending...';
+                }
+
+                try {
+                    const response = await fetch(`${baseUrl}/api/sendMessage`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            user_id: userId,
+                            text: message
+                        })
+                    });
+
+                    if (response.ok) {
+                        this.showMessageStatus(locationId, 'Message sent successfully!', 'success');
+                        messageInput.value = '';
+                        
+                        // Auto-hide form after success
+                        setTimeout(() => {
+                            this.cancelMessage(locationId);
+                        }, 2000);
+                    } else {
+                        const errorData = await response.text();
+                        this.showMessageStatus(locationId, `Failed to send: ${errorData}`, 'error');
+                    }
+                } catch (error) {
+                    this.showMessageStatus(locationId, `Error: ${error.message}`, 'error');
+                } finally {
+                    // Restore button state
+                    if (sendButton) {
+                        sendButton.disabled = false;
+                        sendButton.textContent = 'Send';
+                    }
+                }
+            },
+
+            showMessageStatus(locationId, message, type) {
+                const statusDiv = document.getElementById(`message-status-${locationId}`);
+                if (statusDiv) {
+                    statusDiv.textContent = message;
+                    statusDiv.className = `message-status ${type}`;
+                    statusDiv.style.display = 'block';
+
+                    // Hide status after 5 seconds for success, keep error visible
+                    if (type === 'success') {
+                        setTimeout(() => {
+                            statusDiv.style.display = 'none';
+                        }, 5000);
+                    }
+                }
+            },
+
+            /**
+             * Build chronological paths for each user from their location history
+             * Assigns consistent colors and manages path visibility
+             */
+            buildUserPaths() {
+                this.userPaths.clear();
+                const userLocationMap = new Map();
+
+                // Group locations by user ID
+                this.locations.forEach(location => {
+                    const userId = location.user_id;
+                    if (!userLocationMap.has(userId)) {
+                        userLocationMap.set(userId, []);
+                    }
+                    userLocationMap.get(userId).push(location);
+                });
+
+                // Sort each user's locations chronologically and assign colors
+                userLocationMap.forEach((locations, userId) => {
+                    const sortedLocations = locations.sort((a, b) =>
+                        new Date(a.updated) - new Date(b.updated)
+                    );
+                    this.userPaths.set(userId, sortedLocations);
+
+                    // Assign consistent color for this user's path
+                    if (!this.userColors.has(userId)) {
+                        this.userColors.set(userId, this.generateUserColor(userId));
+                    }
+                });
+
+                if (this.showPaths) {
+                    this.drawAllPaths();
+                }
+            },
+
+            buildUniqueUsers() {
+                // Group locations by user_id and create summary objects
+                const userMap = new Map();
+
+                this.locations.forEach(location => {
+                    const userId = location.user_id;
+
+                    if (!userMap.has(userId)) {
+                        userMap.set(userId, {
+                            user_id: userId,
+                            user_name: location.user_name,
+                            locationCount: 0,
+                            latestUpdate: location.updated,
+                            currentLocation: location.location
+                        });
+                    }
+
+                    const user = userMap.get(userId);
+                    user.locationCount++;
+
+                    // Keep track of the most recent location
+                    if (new Date(location.updated) > new Date(user.latestUpdate)) {
+                        user.latestUpdate = location.updated;
+                        user.user_name = location.user_name; // Update name in case it changed
+                        user.currentLocation = location.location;
+                    }
+                });
+
+                // Convert to array and sort by latest update (most recent first)
+                this.uniqueUsers = Array.from(userMap.values()).sort((a, b) =>
+                    new Date(b.latestUpdate) - new Date(a.latestUpdate)
+                );
+            },
+
+            /**
+             * Generate a consistent color for a user based on their ID
+             * Uses simple hashing to ensure same user always gets same color
+             */
+            generateUserColor(userId) {
+                const colors = [
+                    '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
+                    '#1abc9c', '#e67e22', '#34495e', '#f1c40f', '#e91e63',
+                    '#00bcd4', '#4caf50', '#ff9800', '#673ab7', '#607d8b'
+                ];
+
+                // Simple hash function for consistent color assignment
+                let hash = 0;
+                for (let i = 0; i < userId.toString().length; i++) {
+                    hash = userId.toString().charCodeAt(i) + ((hash << 5) - hash);
+                }
+                return colors[Math.abs(hash) % colors.length];
+            },
+
+            togglePaths() {
+                this.showPaths = !this.showPaths;
+
+                if (this.showPaths) {
+                    this.drawAllPaths();
+                } else {
+                    this.hideAllPaths();
+                }
+            },
+
+            async drawAllPaths() {
+                // Draw paths for all users concurrently
+                const pathPromises = [];
+                this.userPaths.forEach((locations, userId) => {
+                    pathPromises.push(this.drawUserPath(userId, locations));
+                });
+
+                // Wait for all paths to be drawn
+                await Promise.allSettled(pathPromises);
+            },
+
+            /**
+             * Draw a road-following path for a user's location history
+             * Falls back to straight lines if routing APIs fail
+             */
+            async drawUserPath(userId, locations) {
+                if (this.paths.has(userId)) {
+                    this.map.removeLayer(this.paths.get(userId));
+                }
+
+                if (locations.length < 2) return;
+
+                this.routingInProgress.add(userId);
+
+                try {
+                    // Calculate road-following route using external APIs
+                    const routeCoords = await this.calculateRouteForPath(locations);
+                    const color = this.userColors.get(userId) || '#3498db';
+
+                    const polyline = L.polyline(routeCoords, {
+                        color: color,
+                        weight: 3,
+                        opacity: 0.7,
+                        smoothFactor: 1
+                    }).addTo(this.map);
+
+                    // Add informative popup with path statistics
+                    const userName = locations[locations.length - 1].user_name || 'Unknown User';
+                    const distance = this.calculatePathDistance(routeCoords);
+                    polyline.bindPopup(`
+                        <div>
+                            <strong>${userName}'s Path</strong><br>
+                            <small>${locations.length} locations</small><br>
+                            <small>Distance: ~${distance.toFixed(1)} km</small><br>
+                            <small>From: ${this.formatTime(locations[0].updated)}</small><br>
+                            <small>To: ${this.formatTime(locations[locations.length - 1].updated)}</small>
+                        </div>
+                    `);
+
+                    this.paths.set(userId, polyline);
+
+                } catch (error) {
+                    console.warn(`Failed to calculate route for user ${userId}, falling back to straight lines:`, error);
+
+                    // Fallback: direct lines with visual indication
+                    const pathCoords = locations.map(loc => [loc.location.lat, loc.location.lon]);
+                    const color = this.userColors.get(userId) || '#3498db';
+
+                    const polyline = L.polyline(pathCoords, {
+                        color: color,
+                        weight: 3,
+                        opacity: 0.5,
+                        smoothFactor: 1,
+                        dashArray: '5, 5' // Dashed to indicate fallback
+                    }).addTo(this.map);
+
+                    const userName = locations[locations.length - 1].user_name || 'Unknown User';
+                    polyline.bindPopup(`
+                        <div>
+                            <strong>${userName}'s Path (Direct)</strong><br>
+                            <small>${locations.length} locations</small><br>
+                            <small>From: ${this.formatTime(locations[0].updated)}</small><br>
+                            <small>To: ${this.formatTime(locations[locations.length - 1].updated)}</small><br>
+                            <small style="color: #f39c12;">⚠️ Road routing unavailable</small>
+                        </div>
+                    `);
+
+                    this.paths.set(userId, polyline);
+                } finally {
+                    this.routingInProgress.delete(userId);
+                }
+            },
+
+            hideAllPaths() {
+                this.paths.forEach((path, userId) => {
+                    this.map.removeLayer(path);
+                });
+                this.paths.clear();
+            },
+
+            updateUserPath(location) {
+                const userId = location.user_id;
+
+                // Update the user's path data
+                if (!this.userPaths.has(userId)) {
+                    this.userPaths.set(userId, []);
+                }
+
+                const userLocations = this.userPaths.get(userId);
+
+                // Find if this location already exists (update case)
+                const existingIndex = userLocations.findIndex(loc => loc.id === location.id);
+
+                if (existingIndex >= 0) {
+                    userLocations[existingIndex] = location;
+                } else {
+                    userLocations.push(location);
+                }
+
+                // Re-sort by timestamp
+                userLocations.sort((a, b) => new Date(a.updated) - new Date(b.updated));
+
+                // Assign color if needed
+                if (!this.userColors.has(userId)) {
+                    this.userColors.set(userId, this.generateUserColor(userId));
+                }
+
+                // Redraw path if paths are visible
+                if (this.showPaths) {
+                    this.drawUserPath(userId, userLocations);
+                }
+            },
+
+            /**
+             * Calculate a complete route path by connecting consecutive location points
+             * Handles segment failures gracefully with direct line fallbacks
+             */
+            async calculateRouteForPath(locations) {
+                const allRouteCoords = [];
+
+                // Route between each consecutive pair of locations
+                for (let i = 0; i < locations.length - 1; i++) {
+                    const start = locations[i];
+                    const end = locations[i + 1];
+
+                    try {
+                        const routeSegment = await this.getRouteBetweenPoints(
+                            start.location.lat, start.location.lon,
+                            end.location.lat, end.location.lon
+                        );
+
+                        // Merge segments avoiding duplicate connection points
+                        if (i === 0) {
+                            allRouteCoords.push(...routeSegment);
+                        } else {
+                            allRouteCoords.push(...routeSegment.slice(1));
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to route segment ${i} to ${i + 1}, using direct line:`, error);
+                        // Fallback to direct line for failed segments
+                        if (i === 0) {
+                            allRouteCoords.push([start.location.lat, start.location.lon]);
+                        }
+                        allRouteCoords.push([end.location.lat, end.location.lon]);
+                    }
+                }
+
+                return allRouteCoords;
+            },
+
+            /**
+             * Get road route between two points using external routing APIs
+             * Implements caching and fallback strategy: OpenRouteService -> OSRM -> Direct line
+             */
+            async getRouteBetweenPoints(startLat, startLon, endLat, endLon) {
+                const cacheKey = `${startLat.toFixed(6)},${startLon.toFixed(6)}-${endLat.toFixed(6)},${endLon.toFixed(6)}`;
+
+                // Return cached route if available
+                if (this.routeCache.has(cacheKey)) {
+                    return this.routeCache.get(cacheKey);
+                }
+
+                // Skip API calls for very short distances (< 100m)
+                const distance = this.calculateDistance(startLat, startLon, endLat, endLon);
+                if (distance < 0.1) {
+                    const directRoute = [[startLat, startLon], [endLat, endLon]];
+                    this.routeCache.set(cacheKey, directRoute);
+                    return directRoute;
+                }
+
+                // Try OpenRouteService first (primary routing provider)
+                try {
+                    const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            // Demo API key - replace with your own in production
+                            'Authorization': '5b3ce3597851110001cf6248d2b51b0a2c8a4ad0b2c54b2f1d8e6b1f5'
+                        },
+                        body: JSON.stringify({
+                            coordinates: [[startLon, startLat], [endLon, endLat]],
+                            format: 'geojson',
+                            geometry_simplify: true
+                        })
+                    });
+
+                    if (!response.ok) throw new Error(`Routing API error: ${response.status}`);
+                    
+                    const data = await response.json();
+                    if (data.features && data.features[0] && data.features[0].geometry) {
+                        // Convert from [lon,lat] to [lat,lon] format
+                        const routeCoords = data.features[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                        this.routeCache.set(cacheKey, routeCoords);
+                        return routeCoords;
+                    }
+                    throw new Error('No route found in response');
+                    
+                } catch (error) {
+                    console.warn('OpenRouteService failed, trying OSRM fallback:', error);
+
+                    // Fallback to OSRM (Open Source Routing Machine)
+                    try {
+                        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${startLon},${startLat};${endLon},${endLat}?overview=full&geometries=geojson`;
+                        const osrmResponse = await fetch(osrmUrl);
+
+                        if (!osrmResponse.ok) throw new Error(`OSRM API error: ${osrmResponse.status}`);
+                        
+                        const osrmData = await osrmResponse.json();
+                        if (osrmData.routes && osrmData.routes[0] && osrmData.routes[0].geometry) {
+                            const routeCoords = osrmData.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                            this.routeCache.set(cacheKey, routeCoords);
+                            return routeCoords;
+                        }
+                        throw new Error('No route found in OSRM response');
+                        
+                    } catch (osrmError) {
+                        console.warn('OSRM also failed, using direct line:', osrmError);
+                        
+                        // Final fallback: direct line
+                        const directRoute = [[startLat, startLon], [endLat, endLon]];
+                        this.routeCache.set(cacheKey, directRoute);
+                        return directRoute;
+                    }
+                }
+            },
+
+            /**
+             * Calculate distance between two GPS coordinates using Haversine formula
+             */
+            calculateDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371; // Earth's radius in kilometers
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLon = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return R * c;
+            },
+
+            calculatePathDistance(routeCoords) {
+                let totalDistance = 0;
+                for (let i = 0; i < routeCoords.length - 1; i++) {
+                    const [lat1, lon1] = routeCoords[i];
+                    const [lat2, lon2] = routeCoords[i + 1];
+                    totalDistance += this.calculateDistance(lat1, lon1, lat2, lon2);
+                }
+                return totalDistance;
+            },
+
+            formatTime(timestamp) {
+                try {
+                    const date = new Date(timestamp);
+                    return date.toLocaleString();
+                } catch (err) {
+                    return 'Invalid date';
+                }
+            }
+        }
+    }
+</script>
+</body>
+</html>
