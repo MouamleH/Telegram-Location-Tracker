@@ -31,7 +31,7 @@ A different take on [MouamleH/tg-live-location-bot](https://github.com/MouamleH/
    go run main.go
    ```
 
-3. Open `http://localhost:8080` to view the map interface
+3. Open `http://localhost:8090` to view the map interface
 
 ## Features
 
